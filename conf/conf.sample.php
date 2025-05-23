@@ -56,6 +56,18 @@ $TTS["openai"]["API_KEY"]='';	//API KEY
 $TTS["openai"]["voice"]='nova';	//Voice ID
 $TTS["openai"]["model_id"]='tts-1';	//Model
 
+$TTS["ZONOS"]["endpoint"]='http://127.0.0.1:8765';	//Zonos streaming service endpoint
+$TTS["ZONOS"]["model"]='transformer';	//Model type: 'transformer' or 'hybrid'
+$TTS["ZONOS"]["device"]='cuda';	//Device: 'cuda' or 'cpu'
+$TTS["ZONOS"]["language"]='en-us';	//Language code (en-us, es-es, etc.)
+$TTS["ZONOS"]["speaker_voice"]='assets/exampleaudio.mp3';	//Path to reference voice audio file
+$TTS["ZONOS"]["chunk_schedule"]='[16,9,12,15,20,30,50,80]';	//JSON array of chunk sizes for streaming
+$TTS["ZONOS"]["chunk_overlap"]=2;	//Overlap between chunks for crossfading
+$TTS["ZONOS"]["cfg_scale"]=2.0;	//Classifier-free guidance scale
+$TTS["ZONOS"]["max_new_tokens"]=2580;	//Maximum tokens to generate (86*30 = ~30 seconds)
+$TTS["ZONOS"]["streaming_enabled"]=true;	//Enable progressive audio streaming
+$TTS["ZONOS"]["timeout"]=30;	//HTTP timeout for streaming requests
+
 
 $STT["LOCALWHISPER"]["URL"]="http://127.0.0.1:3000/transcribe";
 
@@ -92,7 +104,7 @@ $ITT["openai"]["AI_PROMPT"]='#HERIKA_NPC1# describes what is seeing using rhymes
 
 
 $STTFUNCTION="whisper";								// Valid options are azure or whisper or localwhisper or deepgram
-$TTSFUNCTION="none";								// Valid options are azure or mimic3, or 11labs so far
+$TTSFUNCTION="none";								// Valid options are azure, mimic3, 11labs, gcp, coqui-ai, xvasynth, openai, convai, xtts, stylettsv2, zonos
 $ITTFUNCTION="none";								// Valid options are azure or mimic3, or 11labs so far
 
 

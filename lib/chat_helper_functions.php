@@ -372,9 +372,9 @@ function returnLines($lines,$writeOutput=true)
                 require_once(__DIR__."/../tts/tts-stylettsv2-2.php");
                 $GLOBALS["TRACK"]["FILES_GENERATED"][]=tts($responseTextUnmooded, $mood, $responseText);
 
-            } else if ($GLOBALS["TTSFUNCTION"] == "stylettsv2") {
+            } else if ($GLOBALS["TTSFUNCTION"] == "zonos") {
 
-                require_once(__DIR__."/../tts/tts-stylettsv2-2.php");
+                require_once(__DIR__."/../tts/tts-zonos.php");
                 $GLOBALS["TRACK"]["FILES_GENERATED"][]=tts($responseTextUnmooded, $mood, $responseText);
 
             } else {

@@ -199,8 +199,8 @@ async def generate_single_tts(request: TTSRequest):
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                     
-                    # Use smaller chunk schedule for better memory management
-                    chunk_schedule = [16, 9, 12, 15] if request.chunk_schedule is None else request.chunk_schedule[:4]
+                    # Use full chunk schedule as provided, or default if none specified
+                    chunk_schedule = [16, 9, 12, 15, 20, 30, 50, 80] if request.chunk_schedule is None else request.chunk_schedule
                     
                     # Reduce max tokens for GPU memory management
                     max_tokens = min(request.max_new_tokens, 1024)
@@ -210,19 +210,24 @@ async def generate_single_tts(request: TTSRequest):
                     stream_generator = model.stream(
                         cond_dicts_generator=cond_generator(),
                         chunk_schedule=chunk_schedule,
-                        chunk_overlap=min(request.chunk_overlap, 1),  # Reduce overlap
+                        chunk_overlap=request.chunk_overlap,  # Use original overlap value
                         cfg_scale=request.cfg_scale,
                         max_new_tokens=max_tokens
                     )
                     
+                    chunk_count = 0
                     for audio_chunk in stream_generator:
                         if isinstance(audio_chunk, torch.Tensor):
+                            chunk_count += 1
                             # Convert to bytes and clear GPU memory
                             audio_bytes = audio_chunk.cpu().numpy().tobytes()
                             del audio_chunk  # Explicit cleanup
                             if torch.cuda.is_available():
                                 torch.cuda.empty_cache()
                             yield audio_bytes
+                    
+                    # Log completion for debugging
+                    logger.info(f"Streaming completed with {chunk_count} audio chunks")
                             
                 except RuntimeError as e:
                     if "CUDA" in str(e) or "cuDNN" in str(e):

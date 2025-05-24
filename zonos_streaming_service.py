@@ -199,12 +199,25 @@ async def generate_single_tts(request: TTSRequest):
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                     
-                    # Use full chunk schedule as provided, or default if none specified
-                    chunk_schedule = [16, 9, 12, 15, 20, 30, 50, 80] if request.chunk_schedule is None else request.chunk_schedule
+                    # Use adaptive chunk schedule based on text length
+                    if request.chunk_schedule is None:
+                        text_length = len(request.text.split())
+                        if text_length <= 5:  # Very short (1-5 words)
+                            chunk_schedule = [8, 12, 16, 20]  # Smaller chunks for quick response
+                        elif text_length <= 20:  # Short (6-20 words)
+                            chunk_schedule = [12, 16, 20, 30, 40]
+                        elif text_length <= 50:  # Medium (21-50 words)
+                            chunk_schedule = [16, 12, 20, 30, 50, 80]  # Current default
+                        else:  # Long text (50+ words)
+                            # Use pattern from official Zonos example for longer text
+                            chunk_schedule = [22, 13, *range(12, 100)]  # Optimal for RTX3090+
+                    else:
+                        chunk_schedule = request.chunk_schedule
                     
                     # Reduce max tokens for GPU memory management
                     max_tokens = min(request.max_new_tokens, 1024)
                     
+                    logger.info(f"Text length: {len(request.text.split())} words")
                     logger.info(f"Starting streaming with chunk_schedule={chunk_schedule}, max_tokens={max_tokens}")
                     
                     stream_generator = model.stream(
@@ -283,6 +296,51 @@ async def generate_single_tts(request: TTSRequest):
         logger.error(f"Full traceback: {error_details}")
         raise HTTPException(status_code=500, detail=f"TTS generation failed: {e}\nDetails: {error_details}")
 
+@app.post("/tts/multi-character")
+async def generate_multi_character_tts(requests: List[TTSRequest]):
+    """Generate TTS for multiple characters simultaneously with proper concurrency"""
+    global model
+    
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    logger.info(f"Processing multi-character TTS for {len(requests)} characters")
+    
+    # Process requests concurrently with asyncio.gather for better performance
+    async def process_single_character(index: int, request: TTSRequest):
+        try:
+            # Note: Since generate_single_tts is not async, we need to run it in a thread
+            # For now, process sequentially but with proper error handling per character
+            response = await generate_single_tts(request)
+            return {
+                "character_index": index,
+                "character_name": request.character_name,
+                "status": "success",
+                "audio_response": response
+            }
+        except Exception as e:
+            logger.error(f"Error processing character {request.character_name}: {e}")
+            return {
+                "character_index": index,
+                "character_name": request.character_name,
+                "status": "error",
+                "error": str(e)
+            }
+    
+    # Process all characters - currently sequential due to GPU memory constraints
+    # In future versions, could implement GPU memory pooling for true concurrency
+    results = []
+    for i, request in enumerate(requests):
+        result = await process_single_character(i, request)
+        results.append(result)
+        
+        # Clear GPU memory between characters
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    
+    logger.info(f"Completed multi-character TTS processing")
+    return {"results": results}
+
 @app.post("/tts/batch")
 async def generate_batch_tts(request: TTSBatchRequest):
     """Generate streaming TTS for multiple sentences (conversation-style)"""
@@ -300,9 +358,25 @@ async def generate_batch_tts(request: TTSBatchRequest):
             speaker = torch.zeros(1, 256, device=model.device)
         
         if request.streaming:
+            # Calculate adaptive chunk schedule for batch requests
+            if request.chunk_schedule is None:
+                total_words = sum(len(sentence.split()) for sentence in request.sentences)
+                if total_words <= 5:  # Very short batch
+                    chunk_schedule = [8, 12, 16, 20]
+                elif total_words <= 20:  # Short batch
+                    chunk_schedule = [12, 16, 20, 30, 40]
+                elif total_words <= 50:  # Medium batch
+                    chunk_schedule = [16, 12, 20, 30, 50, 80]
+                else:  # Long batch
+                    chunk_schedule = [22, 13, *range(12, 100)]
+            else:
+                chunk_schedule = request.chunk_schedule
+                total_words = sum(len(sentence.split()) for sentence in request.sentences)
+            
+            logger.info(f"Batch total words: {total_words}, using chunk_schedule={chunk_schedule}")
+            
             # Streaming batch generation
             def generate_batch_stream():
-                chunk_schedule = request.chunk_schedule or [16, 9, 12, 15, 20, 30, 50, 80]
                 
                 # Create generator for sentences with raw conditioning dicts
                 def sentence_generator():

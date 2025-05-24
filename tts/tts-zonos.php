@@ -7,6 +7,7 @@
  * using the Zonos neural audio synthesis model.
  */
 
+
 function tts($textString, $mood, $stringforhash) {
     
     // Cache check
@@ -24,7 +25,6 @@ function tts($textString, $mood, $stringforhash) {
     $model = $GLOBALS["TTS"]["ZONOS"]["model"];
     $device = $GLOBALS["TTS"]["ZONOS"]["device"];
     $language = $GLOBALS["TTS"]["ZONOS"]["language"];
-    $speakerVoice = $GLOBALS["TTS"]["ZONOS"]["speaker_voice"];
     $chunkSchedule = json_decode($GLOBALS["TTS"]["ZONOS"]["chunk_schedule"], true);
     $chunkOverlap = intval($GLOBALS["TTS"]["ZONOS"]["chunk_overlap"]);
     $cfgScale = floatval($GLOBALS["TTS"]["ZONOS"]["cfg_scale"]);
@@ -35,6 +35,31 @@ function tts($textString, $mood, $stringforhash) {
     // Character name for speaker caching (use Herika name if available)
     $characterName = isset($GLOBALS["HERIKA_NAME"]) ? $GLOBALS["HERIKA_NAME"] : null;
     
+    // Voice selection - exact same pattern as XTTS
+    $voice = isset($GLOBALS["TTS"]["FORCED_VOICE_DEV"]) ? $GLOBALS["TTS"]["FORCED_VOICE_DEV"] : $GLOBALS["TTS"]["ZONOS"]["voiceid"];
+    if (empty($voice)) {
+        $voice = $GLOBALS["TTS"]["ZONOS"]["voiceid"];
+    }
+    
+    // Load voice data from JSON file if it exists (same as XTTS)
+    $voiceJsonPath = __DIR__ . DIRECTORY_SEPARATOR . "data" . DIRECTORY_SEPARATOR . "{$voice}.json";
+    if (file_exists($voiceJsonPath)) {
+        $data_voice = json_decode(file_get_contents($voiceJsonPath), true);
+        $speakerVoice = isset($data_voice['speaker_voice']) ? $data_voice['speaker_voice'] : $GLOBALS["TTS"]["ZONOS"]["speaker_voice"];
+        $GLOBALS["DEBUG_DATA"][] = "Loaded voice from JSON: $voice -> $speakerVoice";
+    } else {
+        $speakerVoice = $GLOBALS["TTS"]["ZONOS"]["speaker_voice"];
+        $GLOBALS["DEBUG_DATA"][] = "No JSON for voice '$voice', using default: $speakerVoice";
+    }
+    
+    // Check if speaker voice file exists
+    $speakerVoiceFullPath = dirname(__FILE__) . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . $speakerVoice;
+    if (!file_exists($speakerVoiceFullPath)) {
+        $GLOBALS["DEBUG_DATA"][] = "WARNING: Speaker voice file not found: $speakerVoiceFullPath";
+    } else {
+        $GLOBALS["DEBUG_DATA"][] = "Speaker voice file exists: $speakerVoiceFullPath";
+    }
+    
     try {
         
         // Check if Zonos service is available
@@ -43,10 +68,14 @@ function tts($textString, $mood, $stringforhash) {
             return false;
         }
         
+        // Convert relative path to absolute path for Zonos service
+        $absoluteSpeakerVoice = dirname(__FILE__) . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . $speakerVoice;
+        $absoluteSpeakerVoice = realpath($absoluteSpeakerVoice); // Normalize the path
+        
         // Prepare request data
         $requestData = [
             'text' => $textString,
-            'speaker_voice' => $speakerVoice,
+            'speaker_voice' => $absoluteSpeakerVoice,
             'language' => $language,
             'chunk_schedule' => $chunkSchedule,
             'chunk_overlap' => $chunkOverlap,
@@ -55,6 +84,9 @@ function tts($textString, $mood, $stringforhash) {
             'streaming' => $streamingEnabled,
             'character_name' => $characterName
         ];
+        
+        // Debug logging
+        $GLOBALS["DEBUG_DATA"][] = "Zonos request data: " . json_encode($requestData);
         
         // Generate audio
         if ($streamingEnabled) {
@@ -268,7 +300,6 @@ function ttsZonosBatch($sentences, $mood, $stringforhash) {
     // Configuration
     $endpoint = $GLOBALS["TTS"]["ZONOS"]["endpoint"];
     $language = $GLOBALS["TTS"]["ZONOS"]["language"];
-    $speakerVoice = $GLOBALS["TTS"]["ZONOS"]["speaker_voice"];
     $chunkSchedule = json_decode($GLOBALS["TTS"]["ZONOS"]["chunk_schedule"], true);
     $chunkOverlap = intval($GLOBALS["TTS"]["ZONOS"]["chunk_overlap"]);
     $cfgScale = floatval($GLOBALS["TTS"]["ZONOS"]["cfg_scale"]);
@@ -276,16 +307,45 @@ function ttsZonosBatch($sentences, $mood, $stringforhash) {
     $timeout = intval($GLOBALS["TTS"]["ZONOS"]["timeout"]);
     $characterName = isset($GLOBALS["HERIKA_NAME"]) ? $GLOBALS["HERIKA_NAME"] : null;
     
+    // Voice selection - exact same pattern as XTTS
+    $voice = isset($GLOBALS["TTS"]["FORCED_VOICE_DEV"]) ? $GLOBALS["TTS"]["FORCED_VOICE_DEV"] : $GLOBALS["TTS"]["ZONOS"]["voiceid"];
+    if (empty($voice)) {
+        $voice = $GLOBALS["TTS"]["ZONOS"]["voiceid"];
+    }
+    
+    // Load voice data from JSON file if it exists (same as XTTS)
+    $voiceJsonPath = __DIR__ . DIRECTORY_SEPARATOR . "data" . DIRECTORY_SEPARATOR . "{$voice}.json";
+    if (file_exists($voiceJsonPath)) {
+        $data_voice = json_decode(file_get_contents($voiceJsonPath), true);
+        $speakerVoice = isset($data_voice['speaker_voice']) ? $data_voice['speaker_voice'] : $GLOBALS["TTS"]["ZONOS"]["speaker_voice"];
+        $GLOBALS["DEBUG_DATA"][] = "Loaded voice from JSON: $voice -> $speakerVoice";
+    } else {
+        $speakerVoice = $GLOBALS["TTS"]["ZONOS"]["speaker_voice"];
+        $GLOBALS["DEBUG_DATA"][] = "No JSON for voice '$voice', using default: $speakerVoice";
+    }
+    
+    // Check if speaker voice file exists
+    $speakerVoiceFullPath = dirname(__FILE__) . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . $speakerVoice;
+    if (!file_exists($speakerVoiceFullPath)) {
+        $GLOBALS["DEBUG_DATA"][] = "WARNING: Speaker voice file not found: $speakerVoiceFullPath";
+    } else {
+        $GLOBALS["DEBUG_DATA"][] = "Speaker voice file exists: $speakerVoiceFullPath";
+    }
+    
     try {
         
         if (!isZonosServiceAvailable($endpoint)) {
             return false;
         }
         
+        // Convert relative path to absolute path for Zonos service
+        $absoluteSpeakerVoice = dirname(__FILE__) . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . $speakerVoice;
+        $absoluteSpeakerVoice = realpath($absoluteSpeakerVoice); // Normalize the path
+        
         // Prepare batch request
         $requestData = [
             'sentences' => $sentences,
-            'speaker_voice' => $speakerVoice,
+            'speaker_voice' => $absoluteSpeakerVoice,
             'language' => $language,
             'chunk_schedule' => $chunkSchedule,
             'chunk_overlap' => $chunkOverlap,

@@ -1,0 +1,20 @@
+#!/bin/bash
+
+echo "Starting Zonos Streaming Service for HerikaServer..."
+cd /home/dwemer/Zonos
+source ./bin/activate
+
+# Install additional dependencies if needed (suppress output to avoid clutter)
+pip install fastapi uvicorn > /dev/null 2>&1
+
+echo "Starting streaming service on port 8765..."
+echo "Service will be available at: http://localhost:8765"
+echo "Model: transformer (RTX 50xx compatible)"
+echo "Press Ctrl+C to stop"
+echo ""
+
+# Copy our full-featured service to the Zonos directory
+cp /var/www/html/HerikaServer/zonos_streaming_service.py /home/dwemer/Zonos/
+
+# Use our full-featured streaming service with voice support
+python3 /home/dwemer/Zonos/zonos_streaming_service.py --host 0.0.0.0 --port 8765 --model transformer --device auto

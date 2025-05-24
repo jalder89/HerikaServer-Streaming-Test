@@ -13,8 +13,5 @@ echo "Model: transformer (RTX 50xx compatible)"
 echo "Press Ctrl+C to stop"
 echo ""
 
-# Copy our full-featured service to the Zonos directory
-cp /var/www/html/HerikaServer/zonos_streaming_service.py /home/dwemer/Zonos/
-
 # Use our full-featured streaming service with voice support
 python3 /home/dwemer/Zonos/zonos_streaming_service.py --host 0.0.0.0 --port 8765 --model transformer --device auto
